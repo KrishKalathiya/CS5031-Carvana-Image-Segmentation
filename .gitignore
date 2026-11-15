@@ -1,5 +1,6 @@
 # Dataset
 carvana-image-masking-challenge/
+carvana-image-masking-challenge.zip
 .vscode/
 # Local extracted data and generated experiment artifacts
 data/raw/*
