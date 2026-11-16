@@ -39,3 +39,37 @@ def preprocess_image(image_path: Path, image_size: int):
 
     return tensor, original_size
 
+def save_prediction(probabilities, original_image_path, output_dir,
+                    original_size, threshold, save_overlay):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    image_id = original_image_path.stem
+
+    mask_array = (probabilities >= threshold).astype(np.uint8) * 255
+    mask_image = Image.fromarray(mask_array, mode="L")
+    mask_image = mask_image.resize(original_size, resample=Image.Resampling.NEAREST)
+
+    mask_path = output_dir / f"{image_id}_predicted_mask.png"
+    mask_image.save(mask_path)
+
+    if save_overlay:
+        original = Image.open(original_image_path).convert("RGB")
+        overlay = np.asarray(original, dtype=np.uint8).copy()
+        mask_full = np.asarray(mask_image, dtype=np.uint8) > 0
+
+    # Tint predicted foreground red so the car boundary is easy to inspect.
+        overlay[mask_full, 0] = np.clip(
+            overlay[mask_full, 0].astype(np.int16) * 0.5 + 127, 0, 255
+        ).astype(np.uint8)
+        overlay[mask_full, 1] = (
+            overlay[mask_full, 1].astype(np.float32) * 0.5
+        ).astype(np.uint8)
+        overlay[mask_full, 2] = (
+            overlay[mask_full, 2].astype(np.float32) * 0.5
+        ).astype(np.uint8)
+
+        overlay_path = output_dir / f"{image_id}_overlay.png"
+        Image.fromarray(overlay).save(overlay_path)
+        return mask_path, overlay_path
+
+    return mask_path, None
+
