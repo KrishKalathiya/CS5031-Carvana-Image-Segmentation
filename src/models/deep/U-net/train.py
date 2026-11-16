@@ -236,3 +236,145 @@ def evaluate(model, loader, device):
             total_dice / max(batches, 1),
             total_iou / max(batches, 1 ),
         )
+
+def main():
+    parser = argparse.ArgumentParser(description="Train Carvana U-Net.")
+    parser.add_argument("--images", type=Path, default=Path("data/train"))
+    parser.add_argument("--masks", type=Path, default=Path("data/train_masks"))
+    parser.add_argument("--output", type=Path, default=Path("outputs"))
+    parser.add_argument("--image-size", type=int, default=256)
+    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument("--val-fraction", type=float, default=0.2)
+    parser.add_argument(
+        "--split-mode", choices=("vehicle", "random"), default="vehicle",
+        help="vehicle = principled Vehicle ID split; random = naive image split"
+    )
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--num-workers", type=int, default=0)
+    args = parser.parse_args()
+
+    if args.image_size % 8 != 0:
+        raise ValueError("--image-size must be divisible by 8 (e.g. 256).")
+
+    set_seed(args.seed)
+    args.output.mkdir(parents=True, exist_ok=True)
+
+    pairs = find_image_mask_pairs(args.images, args.masks)
+    train_pairs, val_pairs = split_pairs(
+        pairs, args.val_fraction, args.split_mode, args.seed
+    )
+
+    print(f"Total paired images: {len(pairs)}")
+    print(f"Training images:     {len(train_pairs)}")
+    print(f"Validation images:   {len(val_pairs)}")
+    print(f"Split mode:          {args.split_mode}")
+
+    if args.split_mode == "vehicle":
+        train_vehicles = {vehicle_id_from_image_id(p[2]) for p in train_pairs}
+        val_vehicles = {vehicle_id_from_image_id(p[2]) for p in val_pairs}
+        overlap = train_vehicles.intersection(val_vehicles)
+        print(f"Vehicle ID overlap:  {len(overlap)} (should be 0)")
+        if overlap:
+            raise RuntimeError("Vehicle leakage detected in vehicle split.")
+
+    # Save the exact split for reproducibility.
+    split_file = args.output / f"{args.split_mode}_split_seed{args.seed}.csv"
+    with split_file.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["image_id", "vehicle_id", "split", "image_path", "mask_path"])
+        for split_name, split_data in (("train", train_pairs), ("validation", val_pairs)):
+            for image_path, mask_path, image_id in split_data:
+                writer.writerow([
+                    image_id, vehicle_id_from_image_id(image_id), split_name,
+                    str(image_path), str(mask_path)
+                ])
+
+    train_dataset = CarvanaDataset(train_pairs, args.image_size)
+    val_dataset = CarvanaDataset(val_pairs, args.image_size)
+
+    pin_memory = torch.cuda.is_available()
+    train_loader = DataLoader(
+        train_dataset, batch_size=args.batch_size, shuffle=True,
+        num_workers=args.num_workers, pin_memory=pin_memory
+    )
+    val_loader = DataLoader(
+        val_dataset, batch_size=args.batch_size, shuffle=False,
+        num_workers=args.num_workers, pin_memory=pin_memory
+    )
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
+
+    model = UNet().to(device)
+    criterion = BCEDiceLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+
+    best_val_dice = -1.0
+    history_path = args.output / f"history_{args.split_mode}.csv"
+
+    with history_path.open("w", newline="", encoding="utf-8") as history_file:
+        writer = csv.writer(history_file)
+        writer.writerow([
+            "epoch", "train_loss", "val_loss", "val_dice", "val_iou"
+        ])
+
+        for epoch in range(1, args.epochs + 1):
+            model.train()
+            running_loss = 0.0
+
+            for batch_index, (images, masks, _) in enumerate(train_loader, start=1):
+                images = images.to(device, non_blocking=True)
+                masks = masks.to(device, non_blocking=True)
+
+                optimizer.zero_grad(set_to_none=True)
+                logits = model(images)
+                loss = criterion(logits, masks)
+                loss.backward()
+                optimizer.step()
+
+                running_loss += loss.item()
+
+                if batch_index % 20 == 0:
+                    print(
+                        f"Epoch {epoch}/{args.epochs} | "
+                        f"Batch {batch_index}/{len(train_loader)} | "
+                        f"Loss {loss.item():.4f}"
+                    )
+
+            train_loss = running_loss / max(len(train_loader), 1)
+            val_loss, val_dice, val_iou = evaluate(model, val_loader, device)
+
+            print(
+                f"Epoch {epoch:02d}/{args.epochs} | "
+                f"train loss: {train_loss:.4f} | "
+                f"val loss: {val_loss:.4f} | "
+                f"Dice: {val_dice:.4f} | IoU: {val_iou:.4f}"
+            )
+
+            writer.writerow([epoch, train_loss, val_loss, val_dice, val_iou])
+            history_file.flush()
+
+            if val_dice > best_val_dice:
+                best_val_dice = val_dice
+                checkpoint = {
+                    "model_state_dict": model.state_dict(),
+                    "image_size": args.image_size,
+                    "epoch": epoch,
+                    "val_dice": val_dice,
+                    "val_iou": val_iou,
+                    "split_mode": args.split_mode,
+                    "seed": args.seed,
+                }
+                checkpoint_path = args.output / f"best_unet_{args.split_mode}.pth"
+                torch.save(checkpoint, checkpoint_path)
+                print(f"Saved best checkpoint: {checkpoint_path}")
+
+    print(f"Training complete. Best validation Dice: {best_val_dice:.4f}")
+    print(f"Split manifest: {split_file}")
+    print(f"Training history: {history_path}")
+
+
+if __name__ == "__main__":
+    main()
