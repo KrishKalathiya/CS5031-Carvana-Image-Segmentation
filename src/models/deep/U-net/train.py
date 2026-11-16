@@ -129,3 +129,50 @@ class CarvanaDataset(Dataset):
         mask = torch.from_numpy(mask).unsqueeze(0)
 
         return image, mask, image_id
+
+def split_pairs(pairs, validation_fraction, split_mode, seed):
+    """Create either a naive image-level split or a vehicle-group split."""
+    rng = random.Random(seed)
+    pairs = list(pairs)
+
+    if split_mode == "random":
+        rng.shuffle(pairs)
+        n_val = max(1, int(round(len(pairs) * validation_fraction)))
+        val_pairs = pairs[:n_val]
+        train_pairs = pairs[n_val:]
+
+    else:
+        groups = {}
+        for pair in pairs:
+            vehicle_id = vehicle_id_from_image_id(pair[2])
+            groups.setdefault(vehicle_id, []).append(pair)
+
+        vehicle_ids = list(groups.keys())
+        rng.shuffle(vehicle_ids)
+
+        target_val_images = max(1, int(round(len(pairs) * validation_fraction)))
+        val_pairs = []
+        train_pairs = []
+
+        for vehicle_id in vehicle_ids:
+            group = groups[vehicle_id]
+            if len(val_pairs) < target_val_images:
+                val_pairs.extend(group)
+            else:
+                train_pairs.extend(group)
+
+        # Avoid an empty training or validation set on very small datasets.
+        if not train_pairs and len(vehicle_ids) > 1:
+            moved_vehicle = vehicle_ids[-1]
+            moved = groups[moved_vehicle]
+            val_ids = {p[2] for p in val_pairs}
+            val_pairs = [p for p in val_pairs if p[2] not in {x[2] for x in moved}]
+            train_pairs.extend(moved)
+
+    if not train_pairs or not val_pairs:
+        raise ValueError(
+            "The split produced an empty training or validation set. "
+            "Check the dataset size and --val-fraction."
+        )
+
+    return train_pairs, val_pairs
