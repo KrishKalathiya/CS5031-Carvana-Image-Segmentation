@@ -25,7 +25,7 @@ import random
 from pathlib import Path
 
 import numpy as np
-from PIL import image
+from PIL import Image
 
 import torch
 import torch.nn as nn
@@ -176,3 +176,63 @@ def split_pairs(pairs, validation_fraction, split_mode, seed):
         )
 
     return train_pairs, val_pairs
+
+class BCEDiceLoss(nn.Module):
+    def __init__(self, bce_weight=0.5, smooth=1.0):
+        super().__init__()
+        self.bce = nn.BCEWithLogitsLoss()
+        self.bce_weight = bce_weight
+        self.smooth = smooth
+
+    def forward(self, logits, targets):
+        bce_loss = self.bce(logits, targets)
+
+        probabilities = torch.sigmoid(logits)
+        probabilities = probabilities.flatten(start_dim=1)
+        targets = targets.flatten(start_dim=1)
+
+        intersection = (probabilities * targets).sum(dim=1)
+        denominator = probabilities.sum(dim=1) + targets.sum(dim=1)
+        dice = (2.0 * intersection + self.smooth) / (
+            denominator + self.smooth
+        )
+        dice_loss = 1.0 - dice.mean()
+
+        return self.bce_weight * bce_loss + (1.0 - self.bce_weight) * dice_loss
+
+@torch.no_grad()
+def evaluate(model, loader, device):
+    model.eval()
+    total_loss = 0.0
+    total_dice = 0.0
+    total_iou = 0.0
+    batches = 0
+    criterion = BCEDiceLoss()
+
+    for images, masks, _ in loader:
+        images = images.to(device, non_blocking=True)
+        masks = masks.to(device, non_blocking=True)
+
+        logits = model(images)
+        loss = criterion(logits, masks)
+        predictions = (torch.sigmoid(logits) >= 0.5).float()
+
+        dims = (1, 2, 3)
+        intersection = (predictions * masks).sum(dim=dims)
+        pred_sum = predictions.sum(dim=dims)
+        mask_sum = masks.sum(dim=dims)
+        union = pred_sum + mask_sum - intersection
+
+        dice = (2.0 * intersection + 1e-7) / (pred_sum + mask_sum + 1e-7)
+        iou = (intersection + 1e-7) / (union + 1e-7)
+
+        total_loss += loss.item()
+        total_dice += dice.mean().item()
+        total_iou += iou.mean().item()
+        batches += 1
+
+        return(
+            total_loss / max(batches, 1),
+            total_dice / max(batches, 1),
+            total_iou / max(batches, 1 ),
+        )
