@@ -91,3 +91,41 @@ def find_image_mask_pairs(image_dir: Path, mask_dir: Path):
     )
 
     return pairs
+
+class CarvanaDataset(Dataset):
+    def __init__(self, pairs, image_size=256):
+        self.pairs = pairs
+        self.image_size = image_size
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def __getitem__(self, index):
+        image_path, mask_path, image_id = self.pairs[index]
+
+        # RGB image -> float tensor [3, H, W], scaled to [0, 1].
+        image = Image.open(image_path).convert("RGB")
+        image = image.resize(
+            (self.image_size, self.image_size),
+            resample=Image.Resampling.BILINEAR
+        )
+        image = np.asarray(image, dtype=np.float32) / 255.0
+        image = torch.from_numpy(image).permute(2, 0, 1).contiguous()
+
+        # Masks are categorical labels. Use nearest-neighbour resizing.
+        # Carvana masks are commonly GIF files with foreground near 255.
+        mask = Image.open(mask_path)
+        try:
+            mask.seek(0)  # Use first frame if the GIF has multiple frames.
+        except EOFError:
+            pass
+        mask = mask.convert("L")
+        mask = mask.resize(
+            (self.image_size, self.image_size),
+            resample=Image.Resampling.NEAREST
+        )
+        mask = np.asarray(mask, dtype=np.uint8)
+        mask = (mask >= 128).astype(np.float32)
+        mask = torch.from_numpy(mask).unsqueeze(0)
+
+        return image, mask, image_id
