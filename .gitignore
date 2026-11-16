@@ -238,3 +238,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated superpixel training tables
+outputs/tables/
