@@ -90,4 +90,12 @@ class UNet(nn.Module):
         # Return logits, not sigmoid probabilities.
         return self.output(d1)
 
+if __name__ =="__main__":
+    #Quick architecture / shape check:
+    model = UNet()
+    sample = torch.randn(2, 3, 256, 256)
+    output = model(sample)
+    print("Input shape: ", tuple(sample.shape))
+    print("Output shape: ", tuple(output.shape))
+
     
