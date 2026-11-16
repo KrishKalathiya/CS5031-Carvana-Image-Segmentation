@@ -35,3 +35,20 @@ from model import UNet
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 
+def set_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_avaliable():
+        torch.cuda.manual_seed_all(seed)
+
+
+def vehicle_id_from_image_id(image_id: str) -> str:
+    """
+    Carvana IDs usually look like:
+        000c8a36845c_01
+        000c8a36845c_02
+    
+    The first 12 characters identify the vehicle.
+    """ 
+    return image_id.split("_")[0]
