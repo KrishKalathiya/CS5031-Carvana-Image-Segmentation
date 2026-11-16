@@ -73,3 +73,78 @@ def save_prediction(probabilities, original_image_path, output_dir,
 
     return mask_path, None
 
+def main():
+    parser = argparse.ArgumentParser(description="Predict Carvana segmentation masks.")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--image", type=Path, help="Path to one image.")
+    source.add_argument("--input-dir", type=Path, help="Folder of images.")
+    parser.add_argument(
+        "--checkpoint", type=Path,
+        default=Path("outputs/best_unet_vehicle.pth")
+    )
+    parser.add_argument("--output", type=Path, default=Path("predictions"))
+    parser.add_argument("--threshold", type=float, default=0.5)
+    parser.add_argument("--save-overlay", action="store_true")
+    args = parser.parse_args()
+
+    if not 0.0 <= args.threshold <= 1.0:
+        raise ValueError("--threshold must be between 0 and 1.")
+
+    if not args.checkpoint.is_file():
+        raise FileNotFoundError(f"Checkpoint not found: {args.checkpoint}")
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    checkpoint = torch.load(args.checkpoint, map_location=device)
+
+    image_size = int(checkpoint.get("image_size", 256))
+    model = UNet().to(device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+
+    if args.image is not None:
+        image_paths = [args.image]
+    else:
+        if not args.input_dir.is_dir():
+            raise NotADirectoryError(f"Input folder not found: {args.input_dir}")
+        image_paths = sorted(
+            p for p in args.input_dir.iterdir()
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        )
+
+    if not image_paths:
+        raise FileNotFoundError("No supported images were found.")
+
+    args.output.mkdir(parents=True, exist_ok=True)
+    print(f"Device: {device}")
+    print(f"Checkpoint: {args.checkpoint}")
+    print(f"Images to predict: {len(image_paths)}")
+
+    with torch.no_grad():
+        for image_path in image_paths:
+            if not image_path.is_file():
+                print(f"Skipping missing image: {image_path}")
+                continue
+
+            tensor, original_size = preprocess_image(image_path, image_size)
+            tensor = tensor.to(device)
+
+            logits = model(tensor)
+            probabilities = torch.sigmoid(logits)[0, 0].cpu().numpy()
+
+            mask_path, overlay_path = save_prediction(
+                probabilities=probabilities,
+                original_image_path=image_path,
+                output_dir=args.output,
+                original_size=original_size,
+                threshold=args.threshold,
+                save_overlay=args.save_overlay,
+            )
+
+            print(f"Saved mask: {mask_path}")
+            if overlay_path is not None:
+                print(f"Saved overlay: {overlay_path}")
+
+
+if __name__ == "__main__":
+    main()
+   
