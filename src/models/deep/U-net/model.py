@@ -66,4 +66,28 @@ class UNet(nn.Module):
         self.decoder1 = DoubleConv(features[0] * 2, features[0])
 
         self.output = nn.Conv2d(features[0], out_channels, kernel_size=1)
-        
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        # Encoder: save intermediate feature maps for skip connections.
+        e1 = self.encoder1(x)
+        e2 = self.encoder2(self.pool(e1))
+        e3 = self.encoder3(self.pool(e2))
+
+         # Bottleneck.
+        b = self.bottleneck(self.pool(e3))
+
+        # Decoder: concatenate encoder features with upsampled features.
+        d3 = self.up3(b)
+        d3 = self.decoder3(torch.cat((d3, e3), dim=1))
+
+        d2 = self.up2(d3)
+        d2 = self.decoder2(torch.cat((d2, e2), dim=1))
+
+        d1 = self.up1(d2)
+        d1 = self.decoder1(torch.cat((d1, e1), dim=1))
+
+        # Return logits, not sigmoid probabilities.
+        return self.output(d1)
+
+    
