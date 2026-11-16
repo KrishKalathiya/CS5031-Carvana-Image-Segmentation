@@ -23,3 +23,19 @@ from PIL import Image
 import torch
 
 from model import UNet
+
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
+
+def preprocess_image(image_path: Path, image_size: int):
+    image = Image.open(image_path).convert("RGB")
+    original_size = image.size # (width, height)
+
+    resized = image.resize(
+            (image_size, image_size),
+            resample=Image.Resampling.BILINEAR
+    )
+    array = np.asarray(resized, dtype=np.float32) / 255.0
+    tensor = torch.from_numpy(array).permute(2, 0, 1).unsqueeze(0).contiguous()
+
+    return tensor, original_size
+
