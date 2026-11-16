@@ -83,12 +83,12 @@ def find_image_mask_pairs(image_dir: Path, mask_dir: Path):
             pairs.append((image_path, mask_path, image_id))
 
     if missing:
-        example = ",".join(missing[:5])
-    raise FileNotFoundError(
-        f"Could not find masks for {len(missing)} images. "
-        f"Example image IDs: {example}. Expected mask names like "
-        f"'<image_id>_mask.gif' in {mask_dir}."
-    )
+        example = ", ".join(missing[:5])
+        raise FileNotFoundError(
+            f"Could not find masks for {len(missing)} images. "
+            f"Example image IDs: {example}. Expected mask names like "
+            f"'<image_id>_mask.gif' in {mask_dir}."
+        )
 
     return pairs
 
