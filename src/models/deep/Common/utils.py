@@ -17,6 +17,9 @@ def set_seed(seed: int = 42) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    if torch.backends.cudnn.is_available():
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def get_device(device: str | None = None) -> torch.device:
@@ -69,7 +72,13 @@ def load_model_weights(model: torch.nn.Module,
     state_dict = checkpoint.get("model_state_dict", checkpoint)
     if not isinstance(state_dict, dict):
         raise KeyError("Checkpoint does not contain a valid model_state_dict")
-    model.load_state_dict(state_dict)
+    try:
+        model.load_state_dict(state_dict)
+    except RuntimeError as error:
+        raise RuntimeError(
+            f"Could not load checkpoint weights from {checkpoint_path}. "
+            "Check that the checkpoint matches the selected model architecture."
+        ) from error
     return checkpoint
 
 

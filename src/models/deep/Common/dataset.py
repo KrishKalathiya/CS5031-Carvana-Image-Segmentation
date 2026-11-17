@@ -9,7 +9,7 @@ existing U-Net training loop.
 """
 
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 import numpy as np
 import torch

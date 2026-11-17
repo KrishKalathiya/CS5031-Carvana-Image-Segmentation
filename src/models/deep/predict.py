@@ -1,4 +1,3 @@
-
 """
 predict.py
 ----------
@@ -29,6 +28,7 @@ import importlib.util
 import numpy as np
 from PIL import Image
 import torch
+from common.dataset import preprocess_image
 
 # ---------------------------------------------------------
 # Make deep_learning available for imports
@@ -52,37 +52,6 @@ from common.utils import (
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
-
-
-# ---------------------------------------------------------
-# Preprocess an image
-# ---------------------------------------------------------
-
-def preprocess_image(image_path, image_size):
-    """
-    Convert an image into the format expected by the models.
-
-    Returns:
-        tensor: [1, 3, H, W], scaled to [0, 1].
-        original_size: Original image dimensions (width, height).
-    """
-
-    image = Image.open(image_path).convert("RGB")
-
-    original_size = image.size
-
-    image = image.resize(
-        (image_size, image_size),
-        resample=Image.Resampling.BILINEAR
-    )
-
-    image = np.asarray(image, dtype=np.float32) / 255.0
-
-    image = torch.from_numpy(image)
-    image = image.permute(2, 0, 1).contiguous()
-    image = image.unsqueeze(0)
-
-    return image, original_size
 
 
 # ---------------------------------------------------------
@@ -288,9 +257,24 @@ def main():
         or default_class
     )
 
+    # Check that the selected model matches the checkpoint
+    saved_model_class = checkpoint.get("model_class")
+
+    if saved_model_class is not None and saved_model_class != model_class_name:
+        raise ValueError(
+            f"Checkpoint was trained with {saved_model_class}, "
+            f"but you selected {model_class_name}."
+        )
+
     image_size = int(
         checkpoint.get("image_size", 256)
     )
+
+    # Validate image size
+    if image_size <= 0:
+        raise ValueError(
+            "Checkpoint image_size must be positive."
+        )
 
     # -----------------------------------------------------
     # Load selected model architecture
@@ -319,6 +303,11 @@ def main():
     # -----------------------------------------------------
 
     if args.image is not None:
+
+        if not args.image.is_file():
+            raise FileNotFoundError(
+                f"Image not found: {args.image}"
+            )
 
         image_paths = [args.image]
 

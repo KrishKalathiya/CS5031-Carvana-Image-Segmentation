@@ -121,6 +121,7 @@ def generate_submission(model: torch.nn.Module,
         if header != ["img", "rle_mask"]:
             raise RuntimeError(f"Unexpected submission header: {header}")
         row_count = sum(1 for _ in reader)
+
     if row_count != len(image_paths):
         raise RuntimeError(
             f"Submission has {row_count} rows but {len(image_paths)} images were found"
@@ -133,6 +134,7 @@ def generate_submission(model: torch.nn.Module,
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create a Carvana Kaggle submission")
+
     parser.add_argument("--model-file", type=Path, required=True,
                         help="Path to the architecture's model.py")
     parser.add_argument("--model-class", type=str, required=True,
@@ -147,21 +149,46 @@ def main() -> None:
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--model-kwargs", type=str, default="{}",
                         help="Optional JSON kwargs passed to the model constructor")
+
     args = parser.parse_args()
+
+    # Validate arguments.
+    if args.image_size is not None and args.image_size <= 0:
+        parser.error("--image-size must be positive")
+
+    if not 0.0 <= args.threshold <= 1.0:
+        parser.error("--threshold must be between 0 and 1")
 
     device = get_device(args.device)
     checkpoint = load_checkpoint(args.checkpoint, map_location="cpu")
-    image_size = args.image_size or int(checkpoint.get("image_size", DEFAULT_CONFIG.image_size))
+
+    # Verify that the selected model matches the checkpoint architecture.
+    saved_model_class = checkpoint.get("model_class")
+
+    if saved_model_class is not None and saved_model_class != args.model_class:
+        parser.error(
+            f"Checkpoint was trained with {saved_model_class}, "
+            f"but you selected {args.model_class}."
+        )
+
+    # Use the specified image size or the size saved in the checkpoint.
+    image_size = (
+        args.image_size
+        if args.image_size is not None
+        else int(checkpoint.get("image_size", DEFAULT_CONFIG.image_size))
+    )
 
     try:
         model_kwargs = json.loads(args.model_kwargs)
     except json.JSONDecodeError as exc:
         parser.error(f"--model-kwargs must be valid JSON: {exc}")
+
     if not isinstance(model_kwargs, dict):
         parser.error("--model-kwargs must decode to a JSON object")
 
     model_class = import_model_class(args.model_file, args.model_class)
     model = model_class(**model_kwargs)
+
     load_model_weights(model, args.checkpoint, device=device)
 
     generate_submission(

@@ -15,6 +15,8 @@ class BCEDiceLoss(nn.Module):
         super().__init__()
         if not 0.0 <= bce_weight <= 1.0:
             raise ValueError("bce_weight must be between 0 and 1")
+        if smooth <= 0:
+            raise ValueError("smooth must be positive")
         self.bce = nn.BCEWithLogitsLoss()
         self.bce_weight = float(bce_weight)
         self.smooth = float(smooth)

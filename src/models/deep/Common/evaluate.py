@@ -107,10 +107,26 @@ def main() -> None:
         parser.error("--image-size must be positive")
     if args.batch_size <= 0:
         parser.error("--batch-size must be positive")
+    if args.num_workers < 0:
+        parser.error("--num-workers cannot be negative")
 
     device = get_device(args.device)
     checkpoint_preview = load_checkpoint(args.checkpoint, map_location="cpu")
-    image_size = args.image_size or int(checkpoint_preview.get("image_size", DEFAULT_CONFIG.image_size))
+
+    # Verify that the selected model matches the checkpoint architecture.
+    saved_model_class = checkpoint_preview.get("model_class")
+    if saved_model_class is not None and saved_model_class != args.model_class:
+        parser.error(
+            f"Checkpoint was trained with {saved_model_class}, "
+            f"but you selected {args.model_class}."
+        )
+
+    # Use the specified image size or the size saved in the checkpoint.
+    image_size = (
+        args.image_size
+        if args.image_size is not None
+        else int(checkpoint_preview.get("image_size", DEFAULT_CONFIG.image_size))
+    )
 
     try:
         model_kwargs = json.loads(args.model_kwargs)

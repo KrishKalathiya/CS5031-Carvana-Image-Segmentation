@@ -1,4 +1,3 @@
-
 """
 train.py
 --------
@@ -21,8 +20,8 @@ deep_learning/
 
 Run from the deep_learning directory:
 
-    python train.py --model-dir U_net --model-class UNet
-    python train.py --model-dir Link_net --model-class LinkNet
+    python train.py --model-dir U_net
+    python train.py --model-dir Link_net
 """
 
 import argparse
@@ -163,7 +162,7 @@ def main():
     parser.add_argument(
         "--model-class",
         type=str,
-        default="UNet"
+        default=None
     )
 
     # Dataset paths
@@ -237,14 +236,27 @@ def main():
 
     args = parser.parse_args()
 
+    # Automatically select the correct model class
+    if args.model_class is None:
+        args.model_class = (
+            "UNet" if args.model_dir == "U_net" else "LinkNet"
+        )
+
     # -----------------------------------------------------
     # Validate settings
     # -----------------------------------------------------
 
-    if args.image_size % 8 != 0:
+    if args.image_size <= 0 or args.image_size % 8 != 0:
         raise ValueError(
-            "--image-size must be divisible by 8 (for example, 256)."
+            "--image-size must be positive and divisible by 8 "
+            "(for example, 256)."
         )
+
+    if args.learning_rate <= 0:
+        raise ValueError("--learning-rate must be positive.")
+
+    if args.num_workers < 0:
+        raise ValueError("--num-workers cannot be negative.")
 
     if not 0 < args.val_fraction < 1:
         raise ValueError("--val-fraction must be between 0 and 1.")
@@ -410,11 +422,17 @@ def main():
     # Training output files
     # -----------------------------------------------------
 
-    history_path = args.output / (f"history_{args.model_dir}_{args.split_mode}.csv")
+    history_path = args.output / (
+        f"history_{args.model_dir}_{args.split_mode}.csv"
+    )
 
-    model_filename = ("unet" if args.model_dir == "U_net" else "linknet")
+    model_filename = (
+        "unet" if args.model_dir == "U_net" else "linknet"
+    )
 
-    checkpoint_path = args.output / (f"best_{model_filename}_{args.split_mode}.pth")
+    checkpoint_path = args.output / (
+        f"best_{model_filename}_{args.split_mode}.pth"
+    )
 
     best_val_dice = -1.0
 
@@ -422,8 +440,11 @@ def main():
     # Training loop
     # -----------------------------------------------------
 
-    with history_path.open("w", newline="", encoding="utf-8"
-    )   as history_file:
+    with history_path.open(
+        "w",
+        newline="",
+        encoding="utf-8"
+    ) as history_file:
 
         writer = csv.writer(history_file)
 
