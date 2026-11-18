@@ -12,8 +12,9 @@ from src.data.carvana import load_manifest, load_pair
 from src.evaluation.metrics import binary_segmentation_metrics
 from src.models.classical.superpixel_rf import SuperpixelRF
 
-# To run this script, go to the project root and run: python -m scripts.eval_classical
-
+# To run this script, go to the project root and run:
+# python -m scripts.eval_classical --experiment <experiment_id>
+# <experiment_id> is the name of the experiment folder in outputs/experiments, found in the config.json
 
 ROOT = Path(__file__).resolve().parents[1]
 
