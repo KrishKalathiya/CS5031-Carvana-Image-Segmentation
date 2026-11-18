@@ -1,0 +1,23 @@
+
+{
+  "experiment_id": "rf_20cars_100k",
+  "model": "SLIC + Random Forest",
+  "evaluation_split": "vehicle_level_validation",
+  "validation_images": 768,
+  "training_vehicles": 20,
+  "training_regions": 100000,
+  "image_size": [768, 512],
+  "n_segments": 800,
+  "compactness": 10,
+  "sigma": 1,
+  "decision_threshold": 0.5,
+  "metrics": {
+    "dice": 0.9181,
+    "iou": 0.8507,
+    "precision": 0.9151,
+    "recall": 0.9252,
+    "latency_ms": 432.4728
+  },
+  "training_seconds": 6.42,
+  "random_seed": 42
+}

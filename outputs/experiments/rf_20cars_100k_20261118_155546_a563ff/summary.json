@@ -1,0 +1,13 @@
+{
+  "experiment_id": "rf_20cars_100k_20261118_155546_a563ff",
+  "evaluation_split": "vehicle_level_validation",
+  "validation_images": 768,
+  "decision_threshold": 0.5,
+  "metrics": {
+    "dice": 0.9180720639106732,
+    "iou": 0.8507201982803606,
+    "precision": 0.9150622163415575,
+    "recall": 0.9251531872393622,
+    "latency_ms": 445.33095833308306
+  }
+}

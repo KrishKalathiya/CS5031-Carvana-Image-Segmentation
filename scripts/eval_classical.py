@@ -1,3 +1,6 @@
+import argparse
+import json
+
 from pathlib import Path
 from time import perf_counter
 
@@ -26,15 +29,28 @@ CONFIG_PATH = (
 OUTPUT_DIR = ROOT / "outputs" / "rf_validation"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-IMAGE_SIZE = (768, 512)
 THRESHOLD = 0.5
 
 # Set to None for the complete validation set
 MAX_IMAGES = None
 
 
-def evaluate():
-    model = SuperpixelRF(MODEL_PATH, CONFIG_PATH)
+def evaluate(experiment_id):
+    experiment_dir = (
+        ROOT / "outputs" / "experiments" / experiment_id
+    )
+
+    model_path = experiment_dir / "model.joblib"
+    config_path = experiment_dir / "config.json"
+
+    if not model_path.is_file() or not config_path.is_file():
+        raise FileNotFoundError(
+            f"Missing model or configuration for {experiment_id}"
+        )
+
+    model = SuperpixelRF(model_path, config_path)
+
+    image_size = tuple(model.config["image_size"])
 
     df = load_manifest(VAL_CSV, ROOT)
 
@@ -56,7 +72,7 @@ def evaluate():
         image, true_mask = load_pair(
             record["image"],
             record["mask"],
-            size=IMAGE_SIZE
+            size=image_size
         )
 
         start = perf_counter()
@@ -96,8 +112,29 @@ def evaluate():
     results_df = pd.DataFrame(results)
 
     results_df.to_csv(
-        OUTPUT_DIR / "per_image.csv",
+        experiment_dir / "metrics.csv",
         index=False
+    )
+
+    metric_columns = [
+    "dice", "iou", "precision",
+    "recall", "latency_ms"
+    ]
+
+    summary = {
+        "experiment_id": experiment_id,
+        "evaluation_split": "vehicle_level_validation",
+        "validation_images": int(len(results_df)),
+        "decision_threshold": THRESHOLD,
+        "metrics": {
+            column: float(results_df[column].mean())
+            for column in metric_columns
+        }
+    }
+
+    (experiment_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2),
+        encoding="utf-8"
     )
 
     print("\n========== RANDOM FOREST RESULTS ==========")
@@ -147,7 +184,7 @@ def evaluate():
 
     plt.tight_layout(pad=2.0)
     plt.savefig(
-        OUTPUT_DIR / "examples.png",
+        experiment_dir / "examples.png",
         dpi=150,
         bbox_inches="tight"
     )
@@ -155,4 +192,14 @@ def evaluate():
 
 
 if __name__ == "__main__":
-    evaluate()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--experiment",
+        required=True,
+        help="ID of the trained experiment to evaluate"
+    )
+
+    args = parser.parse_args()
+
+    evaluate(args.experiment)

@@ -1,3 +1,6 @@
+from datetime import datetime
+from uuid import uuid4
+
 from itertools import zip_longest
 from pathlib import Path
 from time import perf_counter
@@ -23,8 +26,6 @@ ROOT = Path(__file__).resolve().parents[1]
 TABLE_PATH = ROOT / "outputs" / "tables" / "slic_train.csv"
 METADATA_PATH = ROOT / "outputs" / "tables" / "slic_train_metadata.csv"
 TRAIN_CSV = ROOT / "data" / "splits" / "train.csv"
-
-MODEL_DIR = ROOT / "outputs" / "checkpoints"
 
 SEED = 42
 
@@ -205,12 +206,28 @@ def train():
     print(f"Training region accuracy: {train_accuracy:.4f}")
 
     # ----------------------------------------
+    # Create experiment directory
+    # ----------------------------------------
+
+    experiment_id = (
+        f"rf_{len(selected_ids)}cars_{len(X)//1000}k_"
+        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_"
+        f"{uuid4().hex[:6]}"
+    )
+
+    experiment_dir = (
+        ROOT / "outputs" / "experiments" / experiment_id
+    )
+    experiment_dir.mkdir(parents=True, exist_ok=False)
+
+    print(f"\nExperiment: {experiment_id}")
+
+
+    # ----------------------------------------
     # Save model
     # ----------------------------------------
 
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-
-    model_path = MODEL_DIR / "superpixel_rf.joblib"
+    model_path = experiment_dir / "model.joblib"
 
     joblib.dump(model, model_path)
 
@@ -227,10 +244,13 @@ def train():
         "max_depth": 20,
         "min_samples_leaf": 5,
         "max_features": "sqrt",
-        "training_seconds": training_time
+        "training_seconds": training_time,
+        "experiment_id": experiment_id,
+        "max_training_regions": MAX_TRAINING_REGIONS,
+        "sampling_strategy": "random regions from selected vehicles"
     }
 
-    config_path = MODEL_DIR / "superpixel_rf.json"
+    config_path = experiment_dir / "config.json"
 
     config_path.write_text(
         json.dumps(config, indent=2),
