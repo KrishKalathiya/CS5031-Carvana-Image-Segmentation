@@ -1,0 +1,13 @@
+{
+  "experiment_id": "rf_222cars_500k_20261118_164313_351f90",
+  "selection_split": "vehicle_level_validation",
+  "validation_images": 768,
+  "selection_metric": "mean_dice",
+  "best_threshold": 0.45,
+  "metrics": {
+    "dice": 0.9374563741315293,
+    "iou": 0.8834885903455248,
+    "precision": 0.9306580211321779,
+    "recall": 0.9464949857359012
+  }
+}
