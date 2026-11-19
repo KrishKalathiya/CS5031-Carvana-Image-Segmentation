@@ -95,6 +95,7 @@ def generate_submission(model: torch.nn.Module,
         raise FileNotFoundError(f"No test images found in: {image_dir}")
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
+    model = model.to(device)
     model.eval()
 
     with output_csv.open("w", newline="", encoding="utf-8") as csv_file:
