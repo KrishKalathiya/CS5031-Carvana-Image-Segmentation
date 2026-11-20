@@ -2,6 +2,7 @@
 
 Binary segmentation benchmark on the Kaggle Carvana Image Masking Challenge dataset. The objective is to produce a high-resolution binary mask separating each vehicle from its background.
 
+We will be using Python 3.11 for a majority of the project. The dependencies will be stored in `requirements.txt`.
 This repository includes both:
 1. **Classical Vision Baselines:** Otsu thresholding and SLIC superpixel segmentation.
 2. **Deep Learning Architectures:** Custom U-Net and LinkNet (ResNet-34 backbone) with vehicle-isolated cross-validation.
@@ -54,6 +55,7 @@ This repository includes both:
 
 ---
 
+The "naive" split where images are split randomly is in ```data/splits/naive```, and the proper datasplit (where all 16 images of the same car are only in one of the sets and not the other) are in ```data/splits```.
 ## 2. Setup & Installation
 
 ### Environment Setup

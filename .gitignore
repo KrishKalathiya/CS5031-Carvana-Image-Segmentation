@@ -17,6 +17,7 @@ outputs/figures/*
 !outputs/figures/.gitkeep
 outputs/logs/*
 !outputs/logs/.gitkeep
+model.joblib
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -68,6 +68,7 @@ def test_saved_tables_keep_metadata_out_of_features(tmp_path, monkeypatch):
     monkeypatch.setattr(builder, "TABLES_DIR", tmp_path / "tables")
     monkeypatch.setattr(builder, "IMAGE_SIZE", None)
     monkeypatch.setattr(builder, "N_SEGMENTS", 4)
+    monkeypatch.setattr(builder, "NUM_WORKERS", 1)
     builder.build_training_table()
 
     table = pd.read_csv(builder.TABLES_DIR / "slic_train.csv")
@@ -85,3 +86,12 @@ def test_saved_tables_keep_metadata_out_of_features(tmp_path, monkeypatch):
         table.loc[metadata.vehicle_id == "car_a", FEATURE_COLUMNS],
         table.loc[metadata.vehicle_id == "car_b", FEATURE_COLUMNS]
     )
+
+    # Parallel processing must preserve the exact rows and metadata order.
+    monkeypatch.setattr(builder, "NUM_WORKERS", 4)
+    monkeypatch.setattr(builder, "TABLES_DIR", tmp_path / "parallel_tables")
+    builder.build_training_table()
+    parallel_table = pd.read_csv(builder.TABLES_DIR / "slic_train.csv")
+    parallel_metadata = pd.read_csv(builder.TABLES_DIR / "slic_train_metadata.csv")
+    pd.testing.assert_frame_equal(table, parallel_table)
+    pd.testing.assert_frame_equal(metadata, parallel_metadata)
